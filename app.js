@@ -85,6 +85,7 @@
     input.dataset.inst = inst;
     input.dataset.field = field;
     if (placeholder) input.placeholder = placeholder;
+    input.setAttribute('enterkeyhint', 'next');
     return input;
   }
   function roundBtn(cls, label, title) {
@@ -123,10 +124,12 @@
       var entry = R.lineEntry(state, line, inst.id);
       var qty = numInput('qty', e.qty === undefined || e.qty === '' ? '' : e.qty, '1', inst.id, 'qty', '0');
       var price = numInput('price', entry.price, '0.01', inst.id, 'price');
+      qty.setAttribute('aria-label', inst.name + ' – כמות סועדות');
+      price.setAttribute('aria-label', inst.name + ' – מחיר למנה');
       if (entry.custom) price.classList.add('custom');
-      tr.appendChild(td(i ? 'sep' : '', qty));
-      tr.appendChild(td('', price));
-      tr.appendChild(td('money total-' + inst.id));
+      tr.appendChild(td((i ? 'sep ' : '') + 'c-qty c-' + inst.id, qty));
+      tr.appendChild(td('c-price c-' + inst.id, price));
+      tr.appendChild(td('money c-total c-' + inst.id + ' total-' + inst.id));
     });
     tr.appendChild(td('money line-total sep'));
 
@@ -134,7 +137,9 @@
     note.type = 'text';
     note.dataset.field = 'note';
     note.value = line.note || '';
-    tr.appendChild(td('', note));
+    note.setAttribute('aria-label', 'הערה');
+    note.setAttribute('enterkeyhint', 'next');
+    tr.appendChild(td('c-note', note));
 
     tr.appendChild(td('act', idx === 0
       ? roundBtn('add', '+', 'הוספת שורה לתאריך זה')
@@ -192,6 +197,7 @@
     });
     tr.querySelector('.line-total').textContent = any ? money.format(sum) : '';
     tr.classList.toggle('has-data', any);
+    tr.classList.toggle('has-note', !!String(line.note || '').trim());
   }
 
   function updateTotals() {
@@ -232,6 +238,7 @@
     var field = input.dataset.field;
     if (field === 'note') {
       line.note = input.value;
+      tr.classList.toggle('has-note', !!input.value.trim());
     } else {
       var e = line[input.dataset.inst] || (line[input.dataset.inst] = {});
       if (input.value === '') delete e[field]; else e[field] = Number(input.value);
@@ -297,6 +304,8 @@
     var next = tr.nextElementSibling;
     if (next) {
       var target = next.querySelectorAll('input')[idx];
+      // On a phone, a collapsed empty day shows only its quantity fields.
+      if (!target.offsetParent) target = next.querySelector('input.qty');
       target.focus();
       if (target.select) target.select();
     }
@@ -385,6 +394,16 @@
   }
   $('#prev').addEventListener('click', function () { shiftMonth(-1); });
   $('#next').addEventListener('click', function () { shiftMonth(1); });
+
+  /* ---------- phone bottom bar ---------- */
+  $('#jump-today').addEventListener('click', function () {
+    var row = tbody.querySelector('tr[data-iso="' + R.toIso(new Date()) + '"]');
+    if (!row) { toast('היום אינו בטווח התאריכים המוצג'); return; }
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.classList.add('flash');
+    setTimeout(function () { row.classList.remove('flash'); }, 1600);
+  });
+  $('#export-mobile').addEventListener('click', function () { $('#export').click(); });
 
   /* ---------- clear & export ---------- */
   $('#clear').addEventListener('click', function () {

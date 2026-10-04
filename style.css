@@ -279,3 +279,5 @@ input[type=number] { -moz-appearance: textfield; }
 td input.price.idle:not(:focus) { color: #c3c7cd; font-weight: 400; }
 .special-toggle[aria-pressed="false"] { opacity: .5; }
 td.day-cell:hover .special-toggle, .special-toggle:focus-visible { opacity: 1; }
+
+.mobile-bar { display: none; }

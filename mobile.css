@@ -1,0 +1,146 @@
+/* Phone layout (max-width: 640px). Loaded only on narrow screens, so the
+   desktop design in style.css is never affected. */
+body { font-size: 16px; padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+input, select, textarea { font-size: 16px !important; } /* 16px stops iOS from zooming on focus */
+.wrap { padding: 0 16px; }
+.autosave { display: none; }
+
+/* header & period */
+.header-inner { height: 58px; }
+.brand-mark { width: 34px; height: 34px; }
+.brand-name { font-size: 1.05rem; }
+main { padding-top: 20px; padding-bottom: 20px; }
+.page-head { margin-bottom: 18px; gap: 12px; }
+.page-head > div:first-child { width: 100%; }
+h1 { font-size: 1.75rem; margin: 4px 0 12px; }
+.period-nav { width: 100%; }
+.period-nav select { flex: 1; height: 44px; }
+.icon-btn { width: 44px; height: 44px; flex: none; }
+.head-actions { width: 100%; justify-content: flex-end; }
+.head-actions .btn.primary { display: none; } /* lives in the bottom bar on phones */
+.btn.subtle { height: 36px; padding: 0 10px; font-size: .88rem; }
+
+/* summary cards: grand total first, compact */
+.kpis { grid-template-columns: 1fr; gap: 12px; margin-bottom: 18px; }
+.kpi.grand { order: -1; }
+.kpi { padding: 16px 18px; }
+.kpi-value { font-size: 1.75rem; }
+.kpi-caption { margin-bottom: 10px; }
+.kpi dl { padding-top: 10px; row-gap: 4px; font-size: .88rem; }
+
+/* settings */
+.panel { padding: 18px 16px; margin-bottom: 18px; }
+.settings { grid-template-columns: 1fr; gap: 12px; }
+.setting { padding: 14px; }
+.input-affix, .btn.outline, .date-input { height: 44px; }
+.field-row { flex-wrap: nowrap; }
+.field-row .btn.outline { flex: 1; }
+.setting:has(.date-input) .field-row { flex-wrap: wrap; }
+.date-input { flex: 1 1 100%; min-width: 0; }
+.setting:has(.date-input) .range-sep { flex-basis: 100%; text-align: center; margin: -4px 0; }
+#reset-range { flex-basis: 100%; }
+
+/* daily table -> one card per date */
+.table-panel { padding: 0; background: transparent; border: 0; box-shadow: none; overflow: visible; }
+.table-panel .panel-head { padding: 0 2px; margin-bottom: 12px; }
+.table-scroll { overflow: visible; max-height: none; border-top: 0; }
+#grid, #grid tbody { display: block; min-width: 0; }
+#grid thead, #grid tfoot { display: none; }
+
+#grid tbody tr {
+  display: grid;
+  grid-template-columns: 3.4rem 1fr 1fr 3.4rem;
+  grid-template-areas:
+    "date day  day  act"
+    "pq   pq   kq   kq"
+    "pp   pp   kp   kp"
+    "pt   pt   kt   kt"
+    "note note note note"
+    "sum  sum  sum  sum";
+  column-gap: 12px; row-gap: 10px; align-items: center;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: var(--shadow); padding: 12px 14px 14px; margin-bottom: 10px;
+}
+#grid tbody tr.special { background: var(--shabbat); border-color: #eadfc4; }
+#grid tbody tr.flash { box-shadow: 0 0 0 3px var(--gold); }
+#grid tbody td {
+  display: block; padding: 0; border: 0 !important; background: transparent !important;
+  text-align: right; white-space: normal; min-width: 0;
+}
+
+/* card header: date, day, Shabbat/holiday toggle, add/remove */
+#grid td.date { grid-area: date; font-size: 1.1rem; font-weight: 700; color: var(--ink); }
+#grid td.day-cell { grid-area: day; display: flex; align-items: center; gap: 10px; }
+#grid .day-name { font-size: .95rem; }
+#grid .special-toggle { margin-top: 0; min-height: 40px; padding: 0 14px; font-size: .82rem; opacity: 1; }
+#grid td.act { grid-area: act; justify-self: end; width: auto; }
+#grid .row-btn { width: 40px; height: 40px; font-size: 1.35rem; }
+
+/* a date's extra lines attach to its card */
+#grid tbody tr:not(.group-start) {
+  margin-top: 0; border-top: 1px dashed var(--line-strong);
+  border-top-left-radius: 0; border-top-right-radius: 0; box-shadow: none;
+}
+#grid tbody tr:not(.group-start)::before {
+  content: "שורה נוספת"; grid-row: 1; grid-column: 1 / 4; font-size: .85rem; color: var(--muted);
+}
+#grid tbody tr:has(+ tr:not(.group-start)) {
+  margin-bottom: 0; border-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0;
+}
+
+/* institution columns */
+#grid td.c-qty.c-pninim { grid-area: pq; }
+#grid td.c-qty.c-keter { grid-area: kq; }
+#grid td.c-price.c-pninim { grid-area: pp; }
+#grid td.c-price.c-keter { grid-area: kp; }
+#grid td.c-total.c-pninim { grid-area: pt; }
+#grid td.c-total.c-keter { grid-area: kt; }
+
+#grid td.c-qty { display: flex; flex-direction: column; gap: 4px; }
+#grid td.c-qty::before {
+  content: "פנינים"; font-size: .85rem; font-weight: 700; color: var(--pninim);
+  padding-bottom: 6px; margin-bottom: 4px; border-bottom: 2px solid currentColor;
+}
+#grid td.c-qty.c-keter::before { content: "כתר חיה"; color: var(--keter); }
+#grid td.c-qty::after { content: "כמות סועדות"; order: 1; font-size: .75rem; color: var(--muted); }
+#grid td.c-qty input { order: 2; }
+#grid td input.qty {
+  width: 100%; height: 50px; font-size: 1.2rem !important; font-weight: 600;
+  background: #fff; border: 1px solid var(--line-strong); border-radius: 10px;
+}
+
+#grid td.c-price { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+#grid td.c-price::before { content: "מחיר למנה"; font-size: .78rem; color: var(--muted); white-space: nowrap; }
+#grid td input.price { width: 76px; height: 42px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+
+#grid td.c-total { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: .92rem; font-weight: 600; color: var(--ink); }
+#grid td.c-total::before { content: 'סה"כ'; font-size: .78rem; font-weight: 400; color: var(--muted); }
+#grid td.c-total:empty::after { content: "—"; color: #c3c7cd; }
+
+#grid td.c-note { grid-area: note; display: flex; align-items: center; gap: 10px; }
+#grid td.c-note::before { content: "הערה"; font-size: .78rem; color: var(--muted); }
+#grid td input.note { flex: 1; min-width: 0; height: 44px; background: #fff; border: 1px solid var(--line); }
+
+#grid td.line-total {
+  grid-area: sum; display: flex; align-items: baseline; justify-content: space-between;
+  padding-top: 10px; border-top: 1px dashed var(--line-strong) !important;
+  font-size: 1.05rem; font-weight: 700;
+}
+#grid td.line-total::before { content: 'סה"כ לשורה'; font-size: .85rem; font-weight: 500; color: var(--muted); }
+#grid td.line-total:empty { display: none; }
+
+/* empty days stay compact until you start typing in them */
+#grid tbody tr:not(.has-data):not(.has-note):not(:focus-within) { grid-template-areas: "date day day act" "pq pq kq kq"; }
+#grid tbody tr:not(.has-data):not(.has-note):not(:focus-within) :is(.c-price, .c-total, .c-note) { display: none; }
+
+/* bottom action bar */
+.mobile-bar {
+  display: flex; gap: 10px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  background: rgba(255, 255, 255, .95); backdrop-filter: blur(8px);
+  border-top: 1px solid var(--line); box-shadow: 0 -4px 16px rgba(28, 42, 57, .06);
+}
+.mobile-bar .btn { height: 48px; }
+.mobile-bar .btn.primary { flex: 1; }
+.toast { bottom: calc(84px + env(safe-area-inset-bottom)); max-width: calc(100% - 32px); text-align: center; }
+.site-footer { padding: 16px 0; }
