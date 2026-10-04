@@ -5,51 +5,98 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>דוחות מנות</title>
   <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="topbar">
-    <div class="wrap topbar-inner">
-      <div>
-        <h1>דוחות סיכום מנות</h1>
-        <p class="subtitle">סמינר פנינים · סמינר כתר חיה</p>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7 3v8a2 2 0 0 1-2 2v8M3 3v6a4 4 0 0 0 4 4M11 3v6a4 4 0 0 1-4 4"/>
+            <path d="M17 21V3c2.5 1 4 3.5 4 7s-1.5 5-4 5"/>
+          </svg>
+        </span>
+        <div>
+          <div class="brand-name">דוחות סיכום מנות</div>
+          <div class="brand-sub">סמינר פנינים · סמינר כתר חיה</div>
+        </div>
       </div>
-      <div class="period">
-        <label>חודש
-          <select id="month"></select>
-        </label>
-        <label>שנה
-          <select id="year"></select>
-        </label>
-      </div>
+      <span class="autosave" id="autosave">
+        <span class="dot"></span>הנתונים נשמרים אוטומטית
+      </span>
     </div>
   </header>
 
   <main class="wrap">
-    <section class="card settings">
-      <div class="setting" data-inst="pninim">
-        <span class="inst-tag pninim">סמינר פנינים</span>
-        <label>מחיר למנה לכל החודש
-          <input type="number" step="0.01" min="0" class="bulk-price">
-        </label>
-        <button type="button" class="btn ghost apply-price">החל על כל הימים</button>
+    <section class="page-head">
+      <div>
+        <div class="eyebrow">תקופת דיווח</div>
+        <h1 id="period-title"></h1>
+        <div class="period-nav">
+          <button type="button" class="icon-btn" id="prev" title="החודש הקודם" aria-label="החודש הקודם">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+          </button>
+          <select id="month" aria-label="חודש"></select>
+          <select id="year" aria-label="שנה"></select>
+          <button type="button" class="icon-btn" id="next" title="החודש הבא" aria-label="החודש הבא">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+          </button>
+        </div>
       </div>
-      <div class="setting" data-inst="keter">
-        <span class="inst-tag keter">סמינר כתר חיה</span>
-        <label>מחיר למנה לכל החודש
-          <input type="number" step="0.01" min="0" class="bulk-price">
-        </label>
-        <button type="button" class="btn ghost apply-price">החל על כל הימים</button>
-      </div>
-      <div class="setting">
-        <label>מע"מ (%)
-          <input type="number" step="0.1" min="0" id="vat">
-        </label>
-        <span class="hint">המחירים כוללים מע"מ. בדוח המע"מ מוצג בנפרד.</span>
+      <div class="head-actions">
+        <button type="button" class="btn subtle" id="clear">ניקוי החודש</button>
+        <button type="button" class="btn primary" id="export">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+          הורדת דוח Excel
+        </button>
       </div>
     </section>
 
-    <section class="card table-card">
+    <section class="kpis" id="summary" aria-live="polite"></section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>הגדרות מחיר</h2>
+        <p>המחירים כוללים מע"מ. בדוח המע"מ מוצג בנפרד.</p>
+      </div>
+      <div class="settings">
+        <div class="setting" data-inst="pninim">
+          <span class="inst-label pninim">סמינר פנינים</span>
+          <div class="field-row">
+            <div class="input-affix">
+              <input type="number" step="0.01" min="0" class="bulk-price" aria-label="מחיר למנה לסמינר פנינים">
+              <span>₪</span>
+            </div>
+            <button type="button" class="btn outline apply-price">החל על כל החודש</button>
+          </div>
+        </div>
+        <div class="setting" data-inst="keter">
+          <span class="inst-label keter">סמינר כתר חיה</span>
+          <div class="field-row">
+            <div class="input-affix">
+              <input type="number" step="0.01" min="0" class="bulk-price" aria-label="מחיר למנה לסמינר כתר חיה">
+              <span>₪</span>
+            </div>
+            <button type="button" class="btn outline apply-price">החל על כל החודש</button>
+          </div>
+        </div>
+        <div class="setting vat-setting">
+          <span class="inst-label">שיעור מע"מ</span>
+          <div class="input-affix">
+            <input type="number" step="0.1" min="0" id="vat" aria-label="שיעור מע&quot;מ">
+            <span>%</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel table-panel">
+      <div class="panel-head">
+        <h2>פירוט יומי</h2>
+        <p>Enter עובר לאותו שדה ביום הבא</p>
+      </div>
       <div class="table-scroll">
         <table id="grid">
           <thead>
@@ -63,10 +110,10 @@
             </tr>
             <tr>
               <th class="sub pninim">מנות</th>
-              <th class="sub pninim">מחיר למנה</th>
+              <th class="sub pninim">מחיר</th>
               <th class="sub pninim">סה"כ</th>
-              <th class="sub keter">מנות</th>
-              <th class="sub keter">מחיר למנה</th>
+              <th class="sub keter sep">מנות</th>
+              <th class="sub keter">מחיר</th>
               <th class="sub keter">סה"כ</th>
             </tr>
           </thead>
@@ -74,28 +121,29 @@
           <tfoot>
             <tr>
               <td colspan="2">סה"כ חודשי</td>
-              <td id="f-pninim-qty"></td><td></td><td id="f-pninim-total"></td>
-              <td id="f-keter-qty"></td><td></td><td id="f-keter-total"></td>
-              <td id="f-all-total"></td><td></td>
+              <td id="f-pninim-qty"></td><td></td><td id="f-pninim-total" class="money"></td>
+              <td id="f-keter-qty" class="sep"></td><td></td><td id="f-keter-total" class="money"></td>
+              <td id="f-all-total" class="money sep"></td><td></td>
             </tr>
           </tfoot>
         </table>
       </div>
     </section>
 
-    <section class="card">
-      <label class="block-label" for="general-note">הערות כלליות לדוח (יופיעו בתחתית הדוח)</label>
-      <textarea id="general-note" rows="2" placeholder="לדוגמה: מספר הזמנה, פרטי איש קשר…"></textarea>
+    <section class="panel">
+      <div class="panel-head">
+        <h2>הערות כלליות</h2>
+        <p>יופיעו בתחתית הדוח</p>
+      </div>
+      <textarea id="general-note" rows="3" placeholder="לדוגמה: מספר הזמנה, פרטי איש קשר…"></textarea>
     </section>
-
-    <section class="summary" id="summary"></section>
-
-    <div class="actions">
-      <button type="button" class="btn danger" id="clear">ניקוי נתוני החודש</button>
-      <button type="button" class="btn primary" id="export">הורדת דוח Excel</button>
-    </div>
-    <p class="saved-note">הנתונים נשמרים אוטומטית בדפדפן זה, לכל חודש בנפרד.</p>
   </main>
+
+  <footer class="site-footer">
+    <div class="wrap">הנתונים נשמרים בדפדפן זה בלבד, לכל חודש בנפרד.</div>
+  </footer>
+
+  <div class="toast" id="toast" role="status"></div>
 
   <script src="vendor/exceljs.min.js"></script>
   <script src="report.js"></script>

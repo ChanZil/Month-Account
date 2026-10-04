@@ -20,7 +20,21 @@
     try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* ignore */ }
   }
   function monthKey() { return 'meals:' + year + '-' + (month + 1); }
-  function saveState() { save(monthKey(), state); }
+  var autosave = $('#autosave'), saveTimer;
+  function saveState() {
+    save(monthKey(), state);
+    autosave.classList.add('saving');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () { autosave.classList.remove('saving'); }, 700);
+  }
+
+  var toastEl = $('#toast'), toastTimer;
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 2600);
+  }
 
   var settings = load('meals:settings', { vat: R.DEFAULT_VAT });
 
@@ -62,6 +76,7 @@
     month = Number(monthSel.value);
     state = load(monthKey(), null) || { days: {}, generalNote: '' };
     save('meals:lastPeriod', { year: year, month: month });
+    $('#period-title').textContent = R.MONTHS[month] + ' ' + year;
     noteInput.value = state.generalNote || '';
 
     tbody.innerHTML = '';
@@ -123,17 +138,19 @@
     var cards = R.INSTITUTIONS.map(function (inst) {
       return summaryCard(inst.name, inst.id, t.institutions[inst.id], vat);
     });
-    cards.push(summaryCard('סה"כ שני המוסדות', '', t.all, vat));
+    cards.push(summaryCard('סה"כ לתשלום', 'grand', t.all, vat));
     $('#summary').innerHTML = cards.join('');
   }
 
   function summaryCard(title, cls, s, vat) {
-    return '<div class="sum-card ' + cls + '"><h3>' + title + '</h3><dl>' +
-      '<dt>מספר מנות</dt><dd>' + s.qty + '</dd>' +
+    return '<article class="kpi ' + cls + '">' +
+      '<div class="kpi-label">' + title + '</div>' +
+      '<div class="kpi-value">' + money.format(s.total) + '</div>' +
+      '<div class="kpi-caption">כולל מע"מ</div><dl>' +
+      '<dt>מספר מנות</dt><dd>' + s.qty.toLocaleString('he-IL') + '</dd>' +
       '<dt>לפני מע"מ</dt><dd>' + money.format(s.beforeVat) + '</dd>' +
       '<dt>מע"מ (' + vat + '%)</dt><dd>' + money.format(s.vat) + '</dd>' +
-      '<dt>סה"כ לתשלום</dt><dd class="grand">' + money.format(s.total) + '</dd>' +
-      '</dl></div>';
+      '</dl></article>';
   }
 
   /* ---------- events ---------- */
@@ -192,6 +209,7 @@
       }
       saveState();
       render();
+      toast('המחיר ' + price + ' ₪ הוחל על כל ימי החודש');
     });
   });
 
@@ -209,18 +227,34 @@
   monthSel.addEventListener('change', render);
   yearSel.addEventListener('change', render);
 
+  function shiftMonth(delta) {
+    var m = month + delta, y = year;
+    if (m < 0) { m = 11; y--; }
+    if (m > 11) { m = 0; y++; }
+    if (!yearSel.querySelector('option[value="' + y + '"]')) {
+      var opt = new Option(y, y);
+      if (delta < 0) yearSel.insertBefore(opt, yearSel.firstChild); else yearSel.add(opt);
+    }
+    monthSel.value = m;
+    yearSel.value = y;
+    render();
+  }
+  $('#prev').addEventListener('click', function () { shiftMonth(-1); });
+  $('#next').addEventListener('click', function () { shiftMonth(1); });
+
   $('#clear').addEventListener('click', function () {
     var label = R.MONTHS[month] + ' ' + year;
     if (!confirm('למחוק את כל הנתונים של ' + label + '?')) return;
     state = { days: {}, generalNote: '' };
     saveState();
     render();
+    toast('נתוני ' + label + ' נמחקו');
   });
 
   $('#export').addEventListener('click', function () {
     var vat = vatInput.value === '' ? R.DEFAULT_VAT : Number(vatInput.value);
     if (!R.reportDays(state, year, month).length) {
-      alert('לא הוזנו מנות לחודש ' + R.MONTHS[month] + ' ' + year + '.');
+      toast('לא הוזנו מנות לחודש ' + R.MONTHS[month] + ' ' + year);
       return;
     }
     var wb = R.buildWorkbook(window.ExcelJS, state, year, month, vat);
@@ -235,6 +269,7 @@
       a.click();
       a.remove();
       setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+      toast('הדוח הורד בהצלחה');
     });
   });
 

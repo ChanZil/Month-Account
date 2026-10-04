@@ -22,3 +22,4 @@
 - `index.html`, `style.css`, `app.js`: ממשק המשתמש.
 - `report.js`: חישובים ובניית קובץ ה-Excel.
 - `vendor/exceljs.min.js`: ספריית [ExcelJS](https://github.com/exceljs/exceljs) (רישיון MIT).
+- `fonts/`: הגופנים Heebo ו-Frank Ruhl Libre (רישיון SIL OFL), כלולים כדי שהעיצוב יישמר גם בלי אינטרנט.
