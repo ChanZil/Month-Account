@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>דוחות מנות</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <div>
+        <h1>דוחות סיכום מנות</h1>
+        <p class="subtitle">סמינר פנינים · סמינר כתר חיה</p>
+      </div>
+      <div class="period">
+        <label>חודש
+          <select id="month"></select>
+        </label>
+        <label>שנה
+          <select id="year"></select>
+        </label>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="card settings">
+      <div class="setting" data-inst="pninim">
+        <span class="inst-tag pninim">סמינר פנינים</span>
+        <label>מחיר למנה לכל החודש
+          <input type="number" step="0.01" min="0" class="bulk-price">
+        </label>
+        <button type="button" class="btn ghost apply-price">החל על כל הימים</button>
+      </div>
+      <div class="setting" data-inst="keter">
+        <span class="inst-tag keter">סמינר כתר חיה</span>
+        <label>מחיר למנה לכל החודש
+          <input type="number" step="0.01" min="0" class="bulk-price">
+        </label>
+        <button type="button" class="btn ghost apply-price">החל על כל הימים</button>
+      </div>
+      <div class="setting">
+        <label>מע"מ (%)
+          <input type="number" step="0.1" min="0" id="vat">
+        </label>
+        <span class="hint">המחירים כוללים מע"מ. בדוח המע"מ מוצג בנפרד.</span>
+      </div>
+    </section>
+
+    <section class="card table-card">
+      <div class="table-scroll">
+        <table id="grid">
+          <thead>
+            <tr>
+              <th rowspan="2" class="col-date">תאריך</th>
+              <th rowspan="2" class="col-day">יום</th>
+              <th colspan="3" class="grp pninim">סמינר פנינים</th>
+              <th colspan="3" class="grp keter">סמינר כתר חיה</th>
+              <th rowspan="2" class="col-sum">סה"כ ליום</th>
+              <th rowspan="2" class="col-note">הערות</th>
+            </tr>
+            <tr>
+              <th class="sub pninim">מנות</th>
+              <th class="sub pninim">מחיר למנה</th>
+              <th class="sub pninim">סה"כ</th>
+              <th class="sub keter">מנות</th>
+              <th class="sub keter">מחיר למנה</th>
+              <th class="sub keter">סה"כ</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+          <tfoot>
+            <tr>
+              <td colspan="2">סה"כ חודשי</td>
+              <td id="f-pninim-qty"></td><td></td><td id="f-pninim-total"></td>
+              <td id="f-keter-qty"></td><td></td><td id="f-keter-total"></td>
+              <td id="f-all-total"></td><td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <label class="block-label" for="general-note">הערות כלליות לדוח (יופיעו בתחתית הדוח)</label>
+      <textarea id="general-note" rows="2" placeholder="לדוגמה: מספר הזמנה, פרטי איש קשר…"></textarea>
+    </section>
+
+    <section class="summary" id="summary"></section>
+
+    <div class="actions">
+      <button type="button" class="btn danger" id="clear">ניקוי נתוני החודש</button>
+      <button type="button" class="btn primary" id="export">הורדת דוח Excel</button>
+    </div>
+    <p class="saved-note">הנתונים נשמרים אוטומטית בדפדפן זה, לכל חודש בנפרד.</p>
+  </main>
+
+  <script src="vendor/exceljs.min.js"></script>
+  <script src="report.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
