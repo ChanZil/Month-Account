@@ -6,7 +6,7 @@
   var money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' });
 
   var monthSel = $('#month'), yearSel = $('#year'), vatInput = $('#vat');
-  var tbody = $('#rows'), noteInput = $('#general-note');
+  var fromInput = $('#from'), toInput = $('#to'), tbody = $('#rows');
   var year, month, state;
 
   /* ---------- storage (localStorage may be unavailable) ---------- */
@@ -19,7 +19,8 @@
   function save(key, value) {
     try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* ignore */ }
   }
-  function monthKey() { return 'meals:' + year + '-' + (month + 1); }
+  function monthKey() { return 'meals:v2:' + year + '-' + (month + 1); }
+
   var autosave = $('#autosave'), saveTimer;
   function saveState() {
     save(monthKey(), state);
@@ -37,6 +38,7 @@
   }
 
   var settings = load('meals:settings', { vat: R.DEFAULT_VAT });
+  function vatRate() { return vatInput.value === '' ? R.DEFAULT_VAT : Number(vatInput.value); }
 
   /* ---------- period selectors ---------- */
   var now = new Date();
@@ -47,140 +49,248 @@
   yearSel.value = last ? last.year : now.getFullYear();
   vatInput.value = settings.vat;
 
+  /* ---------- state helpers ---------- */
+  function period() { return R.periodOf(state, year, month); }
+
+  function ensureDay(iso) {
+    var d = state.days[iso] || (state.days[iso] = {});
+    if (!d.lines) d.lines = [];
+    return d;
+  }
+  function ensureLine(iso, idx) {
+    var d = ensureDay(iso);
+    while (d.lines.length <= idx) d.lines.push({});
+    return d.lines[idx];
+  }
+
   /* ---------- table ---------- */
-  function dayData(day) {
-    return state.days[day] || (state.days[day] = {});
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
   }
-
-  function cell(content, cls) {
-    var td = document.createElement('td');
-    if (cls) td.className = cls;
-    if (content instanceof Node) td.appendChild(content); else td.textContent = content;
-    return td;
+  function td(cls, content) {
+    var c = el('td', cls);
+    if (content instanceof Node) c.appendChild(content); else if (content !== undefined) c.textContent = content;
+    return c;
   }
-
-  function numberInput(cls, value, attrs) {
-    var input = document.createElement('input');
+  function numInput(cls, value, step, inst, field, placeholder) {
+    var input = el('input', cls);
     input.type = 'number';
-    input.className = cls;
     input.min = '0';
-    input.step = attrs.step;
-    input.inputMode = attrs.step === '1' ? 'numeric' : 'decimal';
+    input.step = step;
+    input.inputMode = step === '1' ? 'numeric' : 'decimal';
     input.value = value;
-    if (attrs.placeholder) input.placeholder = attrs.placeholder;
+    input.dataset.inst = inst;
+    input.dataset.field = field;
+    if (placeholder) input.placeholder = placeholder;
     return input;
+  }
+  function roundBtn(cls, label, title) {
+    var b = el('button', 'row-btn ' + cls, label);
+    b.type = 'button';
+    b.title = title;
+    b.setAttribute('aria-label', title);
+    return b;
+  }
+
+  function buildRow(iso, idx, count, line) {
+    var tr = el('tr');
+    tr.dataset.iso = iso;
+    tr.dataset.idx = idx;
+    if (idx === 0) tr.classList.add('group-start');
+    if (R.isSpecial(state, iso)) tr.classList.add('special');
+
+    if (idx === 0) {
+      var p = iso.split('-');
+      var dateCell = td('date', p[2] + '.' + p[1]);
+      dateCell.rowSpan = count;
+      tr.appendChild(dateCell);
+
+      var dayCell = td('day-cell');
+      dayCell.rowSpan = count;
+      dayCell.appendChild(el('div', 'day-name', R.WEEKDAYS[R.weekday(iso)]));
+      var toggle = el('button', 'special-toggle');
+      toggle.type = 'button';
+      dayCell.appendChild(toggle);
+      tr.appendChild(dayCell);
+      setToggle(toggle, R.isSpecial(state, iso));
+    }
+
+    R.INSTITUTIONS.forEach(function (inst, i) {
+      var e = line[inst.id] || {};
+      var entry = R.lineEntry(state, line, inst.id);
+      var qty = numInput('qty', e.qty === undefined || e.qty === '' ? '' : e.qty, '1', inst.id, 'qty', '0');
+      var price = numInput('price', entry.price, '0.01', inst.id, 'price');
+      if (entry.custom) price.classList.add('custom');
+      tr.appendChild(td(i ? 'sep' : '', qty));
+      tr.appendChild(td('', price));
+      tr.appendChild(td('money total-' + inst.id));
+    });
+    tr.appendChild(td('money line-total sep'));
+
+    var note = el('input', 'note');
+    note.type = 'text';
+    note.dataset.field = 'note';
+    note.value = line.note || '';
+    tr.appendChild(td('', note));
+
+    tr.appendChild(td('act', idx === 0
+      ? roundBtn('add', '+', 'הוספת שורה לתאריך זה')
+      : roundBtn('remove', '×', 'מחיקת שורה')));
+    updateRow(tr);
+    return tr;
+  }
+
+  function setToggle(btn, special) {
+    btn.setAttribute('aria-pressed', special ? 'true' : 'false');
+    btn.textContent = special ? 'שבת/חג' : 'סמן כחג';
+    btn.title = special
+      ? 'יום שבת/חג: הסכום מחושב בנפרד. לחצו לביטול'
+      : 'סמנו כיום חג כדי שהסכום יחושב בשורת "שבת וחג"';
+  }
+
+  function drawRows() {
+    var p = period();
+    tbody.innerHTML = '';
+    R.rangeDays(p.from, p.to).forEach(function (iso) {
+      var lines = R.linesOf(state, iso);
+      var count = Math.max(1, lines.length);
+      for (var i = 0; i < count; i++) tbody.appendChild(buildRow(iso, i, count, lines[i] || {}));
+    });
   }
 
   function render() {
     year = Number(yearSel.value);
     month = Number(monthSel.value);
-    state = load(monthKey(), null) || { days: {}, generalNote: '' };
+    state = load(monthKey(), null) || { from: null, to: null, prices: {}, days: {} };
+    if (!state.prices) state.prices = {};
+    if (!state.days) state.days = {};
     save('meals:lastPeriod', { year: year, month: month });
     $('#period-title').textContent = R.MONTHS[month] + ' ' + year;
-    noteInput.value = state.generalNote || '';
 
-    tbody.innerHTML = '';
-    var n = R.daysInMonth(year, month);
-    for (var day = 1; day <= n; day++) {
-      var wd = R.weekday(year, month, day);
-      var tr = document.createElement('tr');
-      tr.dataset.day = day;
-      if (wd === 6) tr.className = 'shabbat';
-      tr.appendChild(cell(String(day).padStart(2, '0') + '/' + String(month + 1).padStart(2, '0'), 'date'));
-      tr.appendChild(cell(R.WEEKDAYS[wd], 'day-name'));
-      R.INSTITUTIONS.forEach(function (inst, i) {
-        var d = (state.days[day] || {})[inst.id] || {};
-        var qty = numberInput('qty', d.qty || '', { step: '1', placeholder: '0' });
-        qty.dataset.inst = inst.id;
-        qty.dataset.field = 'qty';
-        var price = numberInput('price', d.price !== undefined ? d.price : R.DEFAULT_PRICE, { step: '0.01' });
-        price.dataset.inst = inst.id;
-        price.dataset.field = 'price';
-        tr.appendChild(cell(qty, i ? 'sep' : ''));
-        tr.appendChild(cell(price));
-        tr.appendChild(cell('', 'money total-' + inst.id));
-      });
-      tr.appendChild(cell('', 'money day-total sep'));
-      var note = document.createElement('input');
-      note.type = 'text';
-      note.className = 'note';
-      note.dataset.field = 'note';
-      note.value = (state.days[day] || {}).note || '';
-      tr.appendChild(cell(note));
-      tbody.appendChild(tr);
-      updateRow(tr);
-    }
+    var p = period();
+    fromInput.value = p.from;
+    toInput.value = p.to;
+    document.querySelectorAll('.setting[data-inst]').forEach(function (box) {
+      box.querySelector('.bulk-price').value = R.defaultPrice(state, box.dataset.inst);
+    });
+    drawRows();
     updateTotals();
   }
 
   function updateRow(tr) {
-    var day = Number(tr.dataset.day);
+    var iso = tr.dataset.iso;
+    var line = R.linesOf(state, iso)[Number(tr.dataset.idx)] || {};
     var sum = 0, any = false;
     R.INSTITUTIONS.forEach(function (inst) {
-      var e = R.entry(state, day, inst.id);
+      var e = R.lineEntry(state, line, inst.id);
       tr.querySelector('.total-' + inst.id).textContent = e.qty ? money.format(e.total) : '';
-      sum += e.total;
-      if (e.qty) any = true;
+      tr.querySelector('input.price[data-inst="' + inst.id + '"]').classList.toggle('idle', !e.qty);
+      if (e.qty) { sum += e.total; any = true; }
     });
-    tr.querySelector('.day-total').textContent = any ? money.format(sum) : '';
+    tr.querySelector('.line-total').textContent = any ? money.format(sum) : '';
     tr.classList.toggle('has-data', any);
   }
 
   function updateTotals() {
-    var t = R.computeTotals(state, year, month, vatInput.value);
+    var p = period();
+    var t = R.computeTotals(state, p.from, p.to, vatRate());
     R.INSTITUTIONS.forEach(function (inst) {
-      $('#f-' + inst.id + '-qty').textContent = t.institutions[inst.id].qty;
+      $('#f-' + inst.id + '-qty').textContent = t.institutions[inst.id].qty.toLocaleString('he-IL');
       $('#f-' + inst.id + '-total').textContent = money.format(t.institutions[inst.id].total);
     });
     $('#f-all-total').textContent = money.format(t.all.total);
 
-    var vat = vatInput.value;
     var cards = R.INSTITUTIONS.map(function (inst) {
-      return summaryCard(inst.name, inst.id, t.institutions[inst.id], vat);
+      return summaryCard(inst.fullName, inst.id, t.institutions[inst.id]);
     });
-    cards.push(summaryCard('סה"כ לתשלום', 'grand', t.all, vat));
+    cards.push(summaryCard('סה"כ לתשלום', 'grand', t.all));
     $('#summary').innerHTML = cards.join('');
   }
 
-  function summaryCard(title, cls, s, vat) {
+  function summaryCard(title, cls, s) {
     return '<article class="kpi ' + cls + '">' +
       '<div class="kpi-label">' + title + '</div>' +
-      '<div class="kpi-value">' + money.format(s.total) + '</div>' +
+      '<div class="kpi-value">' + money.format(s.incl) + '</div>' +
       '<div class="kpi-caption">כולל מע"מ</div><dl>' +
-      '<dt>מספר מנות</dt><dd>' + s.qty.toLocaleString('he-IL') + '</dd>' +
-      '<dt>לפני מע"מ</dt><dd>' + money.format(s.beforeVat) + '</dd>' +
-      '<dt>מע"מ (' + vat + '%)</dt><dd>' + money.format(s.vat) + '</dd>' +
+      '<dt>סה"כ מנות</dt><dd>' + s.qty.toLocaleString('he-IL') + '</dd>' +
+      '<dt>ימי חול</dt><dd>' + money.format(s.regular) + '</dd>' +
+      '<dt>ימי שבת וחג</dt><dd>' + money.format(s.special) + '</dd>' +
+      '<dt>ללא מע"מ</dt><dd>' + money.format(s.total) + '</dd>' +
+      '<dt>מע"מ (' + vatRate() + '%)</dt><dd>' + money.format(s.vat) + '</dd>' +
       '</dl></article>';
   }
 
-  /* ---------- events ---------- */
+  /* ---------- table events ---------- */
   tbody.addEventListener('input', function (ev) {
     var input = ev.target;
+    if (input.tagName !== 'INPUT') return;
     var tr = input.closest('tr');
-    var d = dayData(Number(tr.dataset.day));
-    if (input.dataset.field === 'note') {
-      d.note = input.value;
+    var line = ensureLine(tr.dataset.iso, Number(tr.dataset.idx));
+    var field = input.dataset.field;
+    if (field === 'note') {
+      line.note = input.value;
     } else {
-      var e = d[input.dataset.inst] || (d[input.dataset.inst] = {});
-      e[input.dataset.field] = input.value === '' ? '' : Number(input.value);
+      var e = line[input.dataset.inst] || (line[input.dataset.inst] = {});
+      if (input.value === '') delete e[field]; else e[field] = Number(input.value);
+      if (field === 'price') input.classList.toggle('custom', input.value !== '');
       updateRow(tr);
       updateTotals();
     }
     saveState();
   });
 
-  // Restore the default price if a price field is left empty.
+  // An emptied price goes back to the default price.
   tbody.addEventListener('change', function (ev) {
     var input = ev.target;
-    if (input.dataset.field === 'price' && input.value === '') {
-      input.value = R.DEFAULT_PRICE;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
+    if (input.dataset.field !== 'price' || input.value !== '') return;
+    var tr = input.closest('tr');
+    var line = R.linesOf(state, tr.dataset.iso)[Number(tr.dataset.idx)] || {};
+    input.value = R.lineEntry(state, line, input.dataset.inst).price;
+    input.classList.remove('custom');
+  });
+
+  tbody.addEventListener('click', function (ev) {
+    var btn = ev.target.closest('button');
+    if (!btn) return;
+    var tr = btn.closest('tr');
+    var iso = tr.dataset.iso, idx = Number(tr.dataset.idx);
+
+    if (btn.classList.contains('special-toggle')) {
+      var d = ensureDay(iso);
+      var next = !R.isSpecial(state, iso);
+      if (next === (R.weekday(iso) === 6)) delete d.special; else d.special = next;
+      setToggle(btn, next);
+      var group = tbody.querySelectorAll('tr[data-iso="' + iso + '"]');
+      Array.prototype.forEach.call(group, function (row) { row.classList.toggle('special', next); });
+      updateTotals();
+      saveState();
+    } else if (btn.classList.contains('add')) {
+      var day = ensureDay(iso);
+      while (day.lines.length < 1) day.lines.push({});
+      day.lines.push({});
+      saveState();
+      drawRows();
+      focusRow(iso, day.lines.length - 1);
+      updateTotals();
+    } else if (btn.classList.contains('remove')) {
+      state.days[iso].lines.splice(idx, 1);
+      saveState();
+      drawRows();
+      updateTotals();
     }
   });
 
-  // Enter moves to the same field on the next day.
+  function focusRow(iso, idx) {
+    var row = tbody.querySelector('tr[data-iso="' + iso + '"][data-idx="' + idx + '"]');
+    if (row) row.querySelector('input.qty').focus();
+  }
+
+  // Enter moves to the same field in the next row.
   tbody.addEventListener('keydown', function (ev) {
-    if (ev.key !== 'Enter') return;
+    if (ev.key !== 'Enter' || ev.target.tagName !== 'INPUT') return;
     ev.preventDefault();
     var tr = ev.target.closest('tr');
     var idx = Array.prototype.indexOf.call(tr.querySelectorAll('input'), ev.target);
@@ -192,72 +302,107 @@
     }
   });
 
-  // Number inputs: prevent the mouse wheel from silently changing values.
+  // Prevent the mouse wheel from silently changing a focused number field.
   tbody.addEventListener('wheel', function (ev) {
     if (ev.target.type === 'number' && document.activeElement === ev.target) ev.target.blur();
   }, { passive: true });
 
+  /* ---------- settings ---------- */
   document.querySelectorAll('.setting[data-inst]').forEach(function (box) {
     var input = box.querySelector('.bulk-price');
-    input.value = R.DEFAULT_PRICE;
     box.querySelector('.apply-price').addEventListener('click', function () {
       var inst = box.dataset.inst;
       var price = input.value === '' ? R.DEFAULT_PRICE : Number(input.value);
-      for (var day = 1; day <= R.daysInMonth(year, month); day++) {
-        var d = dayData(day);
-        (d[inst] || (d[inst] = {})).price = price;
+      var custom = [];
+      Object.keys(state.days).forEach(function (iso) {
+        (state.days[iso].lines || []).forEach(function (line) {
+          if (line[inst] && line[inst].price !== undefined) custom.push(line[inst]);
+        });
+      });
+      state.prices[inst] = price;
+      // Lines with their own price are replaced only if the user agrees.
+      if (custom.length && confirm('יש ' + custom.length + ' שורות עם מחיר שונה. להחליף גם אותן?\n' +
+          'אישור = להחליף את כולן, ביטול = להשאיר אותן ולשנות רק את שאר השורות.')) {
+        custom.forEach(function (e) { delete e.price; });
       }
       saveState();
-      render();
-      toast('המחיר ' + price + ' ₪ הוחל על כל ימי החודש');
+      drawRows();
+      updateTotals();
+      toast('המחיר ' + price + ' ₪ הוגדר לכל החודש');
     });
   });
 
   vatInput.addEventListener('input', function () {
-    settings.vat = vatInput.value === '' ? R.DEFAULT_VAT : Number(vatInput.value);
+    settings.vat = vatRate();
     save('meals:settings', settings);
     updateTotals();
   });
 
-  noteInput.addEventListener('input', function () {
-    state.generalNote = noteInput.value;
+  function setRange(from, to) {
+    if (!from || !to || from > to) { toast('טווח התאריכים אינו תקין'); return false; }
+    if (Math.round((R.parseIso(to) - R.parseIso(from)) / 864e5) + 1 > R.MAX_DAYS) {
+      toast('אפשר לדווח על עד ' + R.MAX_DAYS + ' ימים'); return false;
+    }
+    var def = R.monthRange(year, month);
+    state.from = from === def.from ? null : from;
+    state.to = to === def.to ? null : to;
     saveState();
+    drawRows();
+    updateTotals();
+    return true;
+  }
+  function onRangeChange() {
+    if (!setRange(fromInput.value, toInput.value)) {
+      var p = period();
+      fromInput.value = p.from;
+      toInput.value = p.to;
+    }
+  }
+  fromInput.addEventListener('change', onRangeChange);
+  toInput.addEventListener('change', onRangeChange);
+  $('#reset-range').addEventListener('click', function () {
+    var def = R.monthRange(year, month);
+    fromInput.value = def.from;
+    toInput.value = def.to;
+    setRange(def.from, def.to);
   });
 
+  /* ---------- month navigation ---------- */
   monthSel.addEventListener('change', render);
   yearSel.addEventListener('change', render);
 
   function shiftMonth(delta) {
-    var m = month + delta, y = year;
-    if (m < 0) { m = 11; y--; }
-    if (m > 11) { m = 0; y++; }
-    if (!yearSel.querySelector('option[value="' + y + '"]')) {
-      var opt = new Option(y, y);
+    var m = month + delta, yr = year;
+    if (m < 0) { m = 11; yr--; }
+    if (m > 11) { m = 0; yr++; }
+    if (!yearSel.querySelector('option[value="' + yr + '"]')) {
+      var opt = new Option(yr, yr);
       if (delta < 0) yearSel.insertBefore(opt, yearSel.firstChild); else yearSel.add(opt);
     }
     monthSel.value = m;
-    yearSel.value = y;
+    yearSel.value = yr;
     render();
   }
   $('#prev').addEventListener('click', function () { shiftMonth(-1); });
   $('#next').addEventListener('click', function () { shiftMonth(1); });
 
+  /* ---------- clear & export ---------- */
   $('#clear').addEventListener('click', function () {
     var label = R.MONTHS[month] + ' ' + year;
     if (!confirm('למחוק את כל הנתונים של ' + label + '?')) return;
-    state = { days: {}, generalNote: '' };
+    state = { from: null, to: null, prices: {}, days: {} };
     saveState();
     render();
     toast('נתוני ' + label + ' נמחקו');
   });
 
   $('#export').addEventListener('click', function () {
-    var vat = vatInput.value === '' ? R.DEFAULT_VAT : Number(vatInput.value);
-    if (!R.reportDays(state, year, month).length) {
+    var p = period();
+    if (!R.hasData(state, p.from, p.to)) {
       toast('לא הוזנו מנות לחודש ' + R.MONTHS[month] + ' ' + year);
       return;
     }
-    var wb = R.buildWorkbook(window.ExcelJS, state, year, month, vat);
+    var wb = R.buildWorkbook(window.ExcelJS, state, year, month, vatRate());
     wb.xlsx.writeBuffer().then(function (buf) {
       var blob = new Blob([buf], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

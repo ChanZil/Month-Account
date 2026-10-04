@@ -1,298 +1,295 @@
 /* Shared logic: calculations and Excel report generation.
- * Works in the browser (window.MealReport) and in Node (module.exports). */
+ * Works in the browser (window.MealReport) and in Node (module.exports).
+ *
+ * Data model (one object per report period):
+ *   { from: 'YYYY-MM-DD'|null, to: 'YYYY-MM-DD'|null,
+ *     prices: { pninim: 19.95, keter: 19.95 },                 // default price per meal
+ *     days: { 'YYYY-MM-DD': { special: true|false|undefined,   // Shabbat / holiday override
+ *                             lines: [ { pninim: {qty, price}, keter: {qty, price}, note } ] } } }
+ * Prices are before VAT; VAT is added on top at the end of the report. */
 (function (root) {
   'use strict';
 
   var INSTITUTIONS = [
-    { id: 'pninim', name: 'סמינר פנינים' },
-    { id: 'keter', name: 'סמינר כתר חיה' }
+    { id: 'pninim', name: 'פנינים', fullName: 'סמינר פנינים' },
+    { id: 'keter', name: 'כתר חיה', fullName: 'סמינר כתר חיה' }
   ];
   var DEFAULT_PRICE = 19.95;
   var DEFAULT_VAT = 18;
+  var MAX_DAYS = 92;
   var MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי',
     'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
   var WEEKDAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
-  function daysInMonth(year, month) {
-    return new Date(year, month + 1, 0).getDate();
+  /* ---------- dates (ISO strings 'YYYY-MM-DD', local time) ---------- */
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function daysInMonth(year, month) { return new Date(year, month + 1, 0).getDate(); }
+  function parseIso(s) { var p = s.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function toIso(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function weekday(iso) { return parseIso(iso).getDay(); }
+  function round2(n) { return Math.round(n * 100) / 100; }
+
+  function monthRange(year, month) {
+    return {
+      from: year + '-' + pad(month + 1) + '-01',
+      to: year + '-' + pad(month + 1) + '-' + pad(daysInMonth(year, month))
+    };
   }
 
-  function weekday(year, month, day) {
-    return new Date(year, month, day).getDay();
+  /* The report covers the calendar month unless the user widened/narrowed the range. */
+  function periodOf(state, year, month) {
+    var def = monthRange(year, month);
+    return { from: state.from || def.from, to: state.to || def.to };
   }
 
-  function round2(n) {
-    return Math.round(n * 100) / 100;
-  }
-
-  function entry(state, day, instId) {
-    var d = state.days[day] || {};
-    var e = d[instId] || {};
-    var qty = Number(e.qty) || 0;
-    var price = e.price === undefined || e.price === '' || e.price === null
-      ? DEFAULT_PRICE : Number(e.price) || 0;
-    return { qty: qty, price: price, total: round2(qty * price) };
-  }
-
-  /* Totals per institution and overall. Prices include VAT; VAT is extracted. */
-  function computeTotals(state, year, month, vatRate) {
-    var n = daysInMonth(year, month);
-    var rate = Number(vatRate) / 100;
-    var result = { institutions: {}, all: { qty: 0, total: 0 } };
-    INSTITUTIONS.forEach(function (inst) {
-      var qty = 0, total = 0;
-      for (var day = 1; day <= n; day++) {
-        var e = entry(state, day, inst.id);
-        qty += e.qty;
-        total += e.total;
-      }
-      total = round2(total);
-      var beforeVat = round2(total / (1 + rate));
-      result.institutions[inst.id] = {
-        qty: qty, total: total, beforeVat: beforeVat, vat: round2(total - beforeVat)
-      };
-      result.all.qty += qty;
-      result.all.total += total;
-    });
-    // Overall figures are sums of the per-institution rounded figures, as in the report.
-    result.all.total = round2(result.all.total);
-    result.all.beforeVat = 0;
-    INSTITUTIONS.forEach(function (inst) { result.all.beforeVat += result.institutions[inst.id].beforeVat; });
-    result.all.beforeVat = round2(result.all.beforeVat);
-    result.all.vat = round2(result.all.total - result.all.beforeVat);
-    return result;
-  }
-
-  /* Days that have meals or a note — these are the rows written to the report. */
-  function reportDays(state, year, month) {
-    var days = [];
-    for (var day = 1; day <= daysInMonth(year, month); day++) {
-      var hasMeals = INSTITUTIONS.some(function (inst) {
-        return entry(state, day, inst.id).qty > 0;
-      });
-      var note = (state.days[day] && state.days[day].note || '').trim();
-      if (hasMeals || note) days.push(day);
+  function rangeDays(from, to) {
+    var out = [], d = parseIso(from);
+    while (toIso(d) <= to && out.length < MAX_DAYS) {
+      out.push(toIso(d));
+      d.setDate(d.getDate() + 1);
     }
-    return days;
+    return out;
+  }
+
+  /* ---------- entries ---------- */
+
+  function isSpecial(state, iso) {
+    var d = state.days[iso];
+    if (d && typeof d.special === 'boolean') return d.special;
+    return weekday(iso) === 6;
+  }
+
+  function linesOf(state, iso) {
+    var d = state.days[iso];
+    return (d && d.lines) || [];
+  }
+
+  function hasValue(v) { return v !== undefined && v !== null && v !== ''; }
+
+  function defaultPrice(state, instId) {
+    var p = state.prices && state.prices[instId];
+    return hasValue(p) ? Number(p) || 0 : DEFAULT_PRICE;
+  }
+
+  function lineEntry(state, line, instId) {
+    var e = (line && line[instId]) || {};
+    var qty = Number(e.qty) || 0;
+    var price = hasValue(e.price) ? Number(e.price) || 0 : defaultPrice(state, instId);
+    return { qty: qty, price: price, total: round2(qty * price), custom: hasValue(e.price) };
+  }
+
+  function lineHasContent(state, line) {
+    return INSTITUTIONS.some(function (inst) { return lineEntry(state, line, inst.id).qty > 0; }) ||
+      !!String(line && line.note || '').trim();
+  }
+
+  /* Lines written to the report; a date without any is still listed once (as in the existing reports). */
+  function reportLines(state, iso) {
+    var lines = linesOf(state, iso).filter(function (l) { return lineHasContent(state, l); });
+    return lines.length ? lines : [null];
+  }
+
+  function hasData(state, from, to) {
+    return rangeDays(from, to).some(function (iso) {
+      return linesOf(state, iso).some(function (l) { return lineHasContent(state, l); });
+    });
+  }
+
+  /* ---------- totals ---------- */
+
+  function finish(o, rate) {
+    var incl = o.total * (1 + rate);
+    o.total = round2(o.total);
+    o.special = round2(o.special);
+    o.regular = round2(o.total - o.special);
+    o.incl = round2(incl);
+    o.vat = round2(o.incl - o.total);
+    return o;
+  }
+
+  /* Totals per institution and overall: meals, regular days, Shabbat/holiday, before and after VAT. */
+  function computeTotals(state, from, to, vatRate) {
+    var rate = Number(vatRate) / 100;
+    var days = rangeDays(from, to);
+    var all = { qty: 0, total: 0, special: 0 };
+    var institutions = {};
+    INSTITUTIONS.forEach(function (inst) {
+      var o = { qty: 0, total: 0, special: 0 };
+      days.forEach(function (iso) {
+        var special = isSpecial(state, iso);
+        linesOf(state, iso).forEach(function (line) {
+          var e = lineEntry(state, line, inst.id);
+          o.qty += e.qty;
+          o.total += e.total;
+          if (special) o.special += e.total;
+        });
+      });
+      all.qty += o.qty;
+      all.total += o.total;
+      all.special += o.special;
+      institutions[inst.id] = finish(o, rate);
+    });
+    return { institutions: institutions, all: finish(all, rate) };
   }
 
   function reportFileName(year, month) {
-    return 'meals-report-' + year + '-' + String(month + 1).padStart(2, '0') + '.xlsx';
+    return 'meals-report-' + year + '-' + pad(month + 1) + '.xlsx';
   }
 
-  /* ---------- Excel ---------- */
+  /* ---------- Excel (mirrors the existing monthly reports) ---------- */
 
-  var COLORS = {
-    title: 'FF1F3A5F',
-    header: 'FF2E5A88',
-    pninim: 'FFDCE9F5',
-    keter: 'FFE6F2E6',
-    subHeader: 'FFF2F2F2',
-    shabbat: 'FFFAF5E6',
-    total: 'FFFFF2CC',
-    border: 'FFB7C3D0'
+  var FILL = {
+    blue: 'FFBDD7EE',   // day, date, line total, notes
+    pninim: 'FFFCE4D6',
+    keter: 'FFE2EFDA'
   };
-  var MONEY = '#,##0.00 "₪"';
-  var thin = { style: 'thin', color: { argb: COLORS.border } };
+  var MONEY = '"₪"\\ #,##0.00;[Red]"₪"\\ \\-#,##0.00';
+  var thin = { style: 'thin' };
   var BORDER = { top: thin, left: thin, bottom: thin, right: thin };
+  // Column groups: A,B,I,J blue | C-E Pninim | F-H Keter
+  var COL_FILL = [FILL.blue, FILL.blue, FILL.pninim, FILL.pninim, FILL.pninim,
+    FILL.keter, FILL.keter, FILL.keter, FILL.blue, FILL.blue];
+  var MONEY_COLS = [4, 5, 7, 8, 9];
 
-  function fill(argb) {
-    return { type: 'pattern', pattern: 'solid', fgColor: { argb: argb } };
-  }
+  function letter(col) { return String.fromCharCode(64 + col); }
 
-  function styleRange(ws, row, fromCol, toCol, style) {
-    for (var c = fromCol; c <= toCol; c++) {
-      var cell = ws.getRow(row).getCell(c);
-      Object.keys(style).forEach(function (k) { cell[k] = style[k]; });
+  function styleRow(ws, r, bold) {
+    for (var c = 1; c <= 10; c++) {
+      var cell = ws.getCell(r, c);
+      cell.font = { name: 'Arial', size: 11, bold: !!bold };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: c === 10 };
+      cell.border = BORDER;
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COL_FILL[c - 1] } };
     }
   }
 
-  /* Columns: A date | B day | C-E Pninim (qty, price, total) |
-   * F-H Keter Chaya (qty, price, total) | I daily total | J notes */
   function buildWorkbook(ExcelJS, state, year, month, vatRate) {
-    var totals = computeTotals(state, year, month, vatRate);
-    var days = reportDays(state, year, month);
-    var monthLabel = MONTHS[month] + ' ' + year;
+    var period = periodOf(state, year, month);
+    var days = rangeDays(period.from, period.to);
+    var totals = computeTotals(state, period.from, period.to, vatRate);
 
     var wb = new ExcelJS.Workbook();
     wb.creator = 'מערכת דוחות מנות';
     wb.created = new Date();
-    var ws = wb.addWorksheet('דוח ' + monthLabel, {
-      views: [{ rightToLeft: true, state: 'frozen', ySplit: 5 }],
+    var ws = wb.addWorksheet('דוח ' + MONTHS[month] + ' ' + year, {
+      views: [{ rightToLeft: true, state: 'frozen', ySplit: 2 }],
       pageSetup: {
-        paperSize: 9, orientation: 'portrait', fitToPage: true,
-        fitToWidth: 1, fitToHeight: 0, horizontalCentered: true,
+        paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0,
+        horizontalCentered: true,
         margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 }
-      },
-      headerFooter: { oddFooter: '&Cעמוד &P מתוך &N' }
-    });
-    ws.properties.defaultRowHeight = 18;
-    ws.columns = [
-      { width: 12 }, { width: 9 },
-      { width: 9 }, { width: 11 }, { width: 13 },
-      { width: 9 }, { width: 11 }, { width: 13 },
-      { width: 14 }, { width: 30 }
-    ];
-    var center = { vertical: 'middle', horizontal: 'center', wrapText: true };
-    var font = 'Arial';
-
-    // Title
-    ws.mergeCells('A1:J1');
-    var title = ws.getCell('A1');
-    title.value = 'דוח סיכום מנות – ' + monthLabel;
-    title.font = { name: font, size: 18, bold: true, color: { argb: 'FFFFFFFF' } };
-    title.fill = fill(COLORS.title);
-    title.alignment = center;
-    ws.getRow(1).height = 34;
-
-    ws.mergeCells('A2:J2');
-    var sub = ws.getCell('A2');
-    sub.value = 'סמינר פנינים | סמינר כתר חיה   •   הופק בתאריך: ' +
-      new Date().toLocaleDateString('he-IL');
-    sub.font = { name: font, size: 10, italic: true, color: { argb: 'FF555555' } };
-    sub.alignment = center;
-
-    // Header rows (4 & 5)
-    var hFont = { name: font, bold: true, color: { argb: 'FFFFFFFF' } };
-    ws.mergeCells('A4:A5'); ws.getCell('A4').value = 'תאריך';
-    ws.mergeCells('B4:B5'); ws.getCell('B4').value = 'יום';
-    ws.mergeCells('C4:E4'); ws.getCell('C4').value = INSTITUTIONS[0].name;
-    ws.mergeCells('F4:H4'); ws.getCell('F4').value = INSTITUTIONS[1].name;
-    ws.mergeCells('I4:I5'); ws.getCell('I4').value = 'סה"כ ליום';
-    ws.mergeCells('J4:J5'); ws.getCell('J4').value = 'הערות';
-    styleRange(ws, 4, 1, 10, { font: hFont, fill: fill(COLORS.header), alignment: center, border: BORDER });
-    styleRange(ws, 5, 1, 10, { font: hFont, fill: fill(COLORS.header), alignment: center, border: BORDER });
-    ['מנות', 'מחיר למנה', 'סה"כ', 'מנות', 'מחיר למנה', 'סה"כ'].forEach(function (t, i) {
-      var cell = ws.getRow(5).getCell(3 + i);
-      cell.value = t;
-      cell.font = { name: font, bold: true, color: { argb: 'FF1F3A5F' } };
-      cell.fill = fill(i < 3 ? COLORS.pninim : COLORS.keter);
-    });
-    ws.getRow(4).height = 22;
-    ws.getRow(5).height = 20;
-
-    // Data rows
-    var first = 6;
-    days.forEach(function (day, idx) {
-      var r = first + idx;
-      var p = entry(state, day, 'pninim');
-      var k = entry(state, day, 'keter');
-      var wd = weekday(year, month, day);
-      var row = ws.getRow(r);
-      row.getCell(1).value = new Date(Date.UTC(year, month, day));
-      row.getCell(1).numFmt = 'dd/mm/yyyy';
-      row.getCell(2).value = WEEKDAYS[wd];
-      row.getCell(3).value = p.qty;
-      row.getCell(4).value = p.price;
-      row.getCell(5).value = { formula: 'C' + r + '*D' + r, result: p.total };
-      row.getCell(6).value = k.qty;
-      row.getCell(7).value = k.price;
-      row.getCell(8).value = { formula: 'F' + r + '*G' + r, result: k.total };
-      row.getCell(9).value = { formula: 'E' + r + '+H' + r, result: round2(p.total + k.total) };
-      row.getCell(10).value = (state.days[day] && state.days[day].note || '').trim();
-      for (var c = 1; c <= 10; c++) {
-        var cell = row.getCell(c);
-        cell.border = BORDER;
-        cell.font = { name: font, size: 11, bold: c === 9 };
-        cell.alignment = c === 10
-          ? { vertical: 'middle', horizontal: 'right', wrapText: true }
-          : center;
-        if ([4, 5, 7, 8, 9].indexOf(c) !== -1) cell.numFmt = MONEY;
-        if (wd === 6) cell.fill = fill(COLORS.shabbat);
       }
     });
-    var last = first + days.length - 1;
+    [11, 13, 12, 11, 13, 12.5, 11, 12, 14, 20].forEach(function (w, i) { ws.getColumn(i + 1).width = w; });
 
-    // Totals row
-    var tr = last + 1;
-    var tRow = ws.getRow(tr);
-    ws.mergeCells('A' + tr + ':B' + tr);
-    tRow.getCell(1).value = 'סה"כ חודשי';
-    var sum = function (col, result) {
-      return days.length
-        ? { formula: 'SUM(' + col + first + ':' + col + last + ')', result: result }
-        : result;
+    // Header (rows 1-2)
+    styleRow(ws, 1, true);
+    styleRow(ws, 2, true);
+    ws.getCell('A1').value = 'יום בשבוע';
+    ws.getCell('B1').value = 'תאריך ביצוע';
+    ws.getCell('C1').value = INSTITUTIONS[0].name;
+    ws.getCell('F1').value = INSTITUTIONS[1].name;
+    ws.getCell('I1').value = 'מחיר';
+    ws.getCell('J1').value = 'הערות';
+    [3, 6].forEach(function (c) {
+      ws.getCell(2, c).value = 'כמות סועדות';
+      ws.getCell(2, c + 1).value = 'מחיר למנה';
+      ws.getCell(2, c + 2).value = 'סה"כ';
+    });
+    ['A', 'B', 'I', 'J'].forEach(function (col) { ws.mergeCells(col + '1:' + col + '2'); });
+    ws.mergeCells('C1:E1');
+    ws.mergeCells('F1:H1');
+
+    // Data: every date of the period; one row per line, date and day merged across a date's lines
+    var r = 3;
+    var specialRanges = [];
+    days.forEach(function (iso) {
+      var start = r;
+      reportLines(state, iso).forEach(function (line) {
+        styleRow(ws, r, false);
+        MONEY_COLS.forEach(function (c) { ws.getCell(r, c).numFmt = MONEY; });
+        var sum = 0, any = false;
+        INSTITUTIONS.forEach(function (inst, i) {
+          var e = line ? lineEntry(state, line, inst.id) : { qty: 0 };
+          if (e.qty > 0) {
+            var q = 3 + i * 3;
+            ws.getCell(r, q).value = e.qty;
+            ws.getCell(r, q + 1).value = e.price;
+            ws.getCell(r, q + 2).value = {
+              formula: letter(q) + r + '*' + letter(q + 1) + r, result: e.total
+            };
+            sum += e.total;
+            any = true;
+          }
+        });
+        if (any) ws.getCell(r, 9).value = { formula: 'E' + r + '+H' + r, result: round2(sum) };
+        var note = line && String(line.note || '').trim();
+        if (note) ws.getCell(r, 10).value = note;
+        r++;
+      });
+      var end = r - 1;
+      var d = parseIso(iso);
+      ws.getCell(start, 1).value = WEEKDAYS[d.getDay()];
+      ws.getCell(start, 2).value = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+      ws.getCell(start, 2).numFmt = 'dd.mm.yyyy';
+      if (end > start) {
+        ws.mergeCells('A' + start + ':A' + end);
+        ws.mergeCells('B' + start + ':B' + end);
+      }
+      if (isSpecial(state, iso)) specialRanges.push([start, end]);
+    });
+    var last = r - 1;
+
+    // Summary rows (same labels and order as the existing reports)
+    var rows = { qty: r, regular: r + 1, special: r + 2, net: r + 3, gross: r + 4 };
+    var labels = {
+      qty: 'סה"כ מנות', regular: 'סה"כ לתשלום ימי חול', special: 'סה"כ לתשלום ימי שבת וחג',
+      net: 'סה"כ לתשלום ללא מע"מ', gross: 'סה"כ לתשלום כולל מע"מ'
     };
-    var tp = totals.institutions.pninim, tk = totals.institutions.keter;
-    tRow.getCell(3).value = sum('C', tp.qty);
-    tRow.getCell(5).value = sum('E', tp.total);
-    tRow.getCell(6).value = sum('F', tk.qty);
-    tRow.getCell(8).value = sum('H', tk.total);
-    tRow.getCell(9).value = sum('I', totals.all.total);
-    styleRange(ws, tr, 1, 10, {
-      font: { name: font, bold: true, size: 12 }, fill: fill(COLORS.total),
-      alignment: center, border: { top: { style: 'medium' }, bottom: { style: 'medium' }, left: thin, right: thin }
-    });
-    [5, 8, 9].forEach(function (c) { tRow.getCell(c).numFmt = MONEY; });
-    tRow.height = 22;
-
-    // Summary block
-    var s = tr + 3;
-    ws.mergeCells('C' + s + ':H' + s);
-    var sTitle = ws.getCell('C' + s);
-    sTitle.value = 'סיכום לתשלום';
-    styleRange(ws, s, 3, 8, { font: { name: font, bold: true, size: 13, color: { argb: 'FFFFFFFF' } }, fill: fill(COLORS.title), alignment: center });
-    ws.getRow(s).height = 24;
-
-    var hr = s + 1;
-    ws.mergeCells('C' + hr + ':D' + hr);
-    ws.mergeCells('E' + hr + ':F' + hr);
-    ws.getCell('E' + hr).value = INSTITUTIONS[0].name;
-    ws.getCell('G' + hr).value = INSTITUTIONS[1].name;
-    ws.getCell('H' + hr).value = 'סה"כ';
-    styleRange(ws, hr, 3, 8, { font: { name: font, bold: true }, fill: fill(COLORS.subHeader), alignment: center, border: BORDER });
-    ws.getCell('E' + hr).fill = fill(COLORS.pninim);
-    ws.getCell('G' + hr).fill = fill(COLORS.keter);
-
-    var rate = Number(vatRate) / 100;
-    var rows = [
-      ['מספר מנות', tp.qty, tk.qty, totals.all.qty, null],
-      ['סכום לפני מע"מ', tp.beforeVat, tk.beforeVat, totals.all.beforeVat, 'before'],
-      ['מע"מ (' + vatRate + '%)', tp.vat, tk.vat, totals.all.vat, 'vat'],
-      ['סה"כ לתשלום (כולל מע"מ)', tp.total, tk.total, totals.all.total, 'total']
-    ];
-    var totalRowOf = s + 5; // row of "total incl. VAT"
-    rows.forEach(function (def, i) {
-      var r = hr + 1 + i;
-      ws.mergeCells('C' + r + ':D' + r);
-      ws.mergeCells('E' + r + ':F' + r);
-      ws.getCell('C' + r).value = def[0];
-      var srcQty = { E: 'C' + tr, G: 'F' + tr }, srcTotal = { E: 'E' + tr, G: 'H' + tr };
-      [['E', def[1]], ['G', def[2]]].forEach(function (pair) {
-        var col = pair[0], val = pair[1], f;
-        if (def[4] === null) f = srcQty[col];
-        else if (def[4] === 'total') f = srcTotal[col];
-        else if (def[4] === 'before') f = 'ROUND(' + col + totalRowOf + '/(1+' + rate + '),2)';
-        else f = col + totalRowOf + '-' + col + (totalRowOf - 2);
-        ws.getCell(col + r).value = { formula: f, result: val };
-      });
-      ws.getCell('H' + r).value = { formula: 'E' + r + '+G' + r, result: def[3] };
-      var isTotal = def[4] === 'total';
-      styleRange(ws, r, 3, 8, {
-        font: { name: font, bold: isTotal || i === 0, size: isTotal ? 13 : 11 },
-        alignment: center, border: BORDER,
-        fill: fill(isTotal ? COLORS.total : 'FFFFFFFF')
-      });
-      ws.getCell('C' + r).alignment = { vertical: 'middle', horizontal: 'right', indent: 1 };
-      if (i > 0) ['E', 'G', 'H'].forEach(function (c) { ws.getCell(c + r).numFmt = MONEY; });
-      ws.getRow(r).height = isTotal ? 24 : 20;
+    Object.keys(rows).forEach(function (key) {
+      var row = rows[key];
+      styleRow(ws, row, false);
+      var label = ws.getCell(row, 1);
+      label.value = labels[key];
+      label.font = { name: 'Arial', size: 11, bold: true };
+      label.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      ws.mergeCells('A' + row + ':B' + row);
+      ws.mergeCells('C' + row + ':E' + row);
+      ws.mergeCells('F' + row + ':H' + row);
+      if (key !== 'qty') [3, 6, 9].forEach(function (c) { ws.getCell(row, c).numFmt = MONEY; });
+      if (key === 'regular' || key === 'special') ws.getRow(row).height = 30;
     });
 
-    var note = (state.generalNote || '').trim();
-    if (note) {
-      var nr = hr + rows.length + 3;
-      ws.getCell('A' + nr).value = 'הערות כלליות:';
-      ws.getCell('A' + nr).font = { name: font, bold: true };
-      ws.mergeCells('B' + nr + ':J' + (nr + 2));
-      var nc = ws.getCell('B' + nr);
-      nc.value = note;
-      nc.font = { name: font };
-      nc.alignment = { vertical: 'top', horizontal: 'right', wrapText: true };
-      nc.border = BORDER;
-    }
+    INSTITUTIONS.forEach(function (inst, i) {
+      var c = 3 + i * 3;                 // merged value cell: C or F
+      var vc = letter(c);
+      var qtyCol = letter(c);            // quantity column of this institution
+      var totalCol = letter(c + 2);      // line-total column: E or H
+      var t = totals.institutions[inst.id];
+      var specialRefs = specialRanges.map(function (p) {
+        return totalCol + p[0] + (p[1] > p[0] ? ':' + totalCol + p[1] : '');
+      });
+      ws.getCell(rows.qty, c).value = { formula: 'SUM(' + qtyCol + '3:' + qtyCol + last + ')', result: t.qty };
+      ws.getCell(rows.net, c).value = { formula: 'SUM(' + totalCol + '3:' + totalCol + last + ')', result: t.total };
+      ws.getCell(rows.special, c).value = specialRefs.length
+        ? { formula: 'SUM(' + specialRefs.join(',') + ')', result: t.special } : 0;
+      ws.getCell(rows.regular, c).value = {
+        formula: vc + rows.net + '-' + vc + rows.special, result: t.regular
+      };
+      ws.getCell(rows.gross, c).value = {
+        formula: vc + rows.net + '*(1+' + Number(vatRate) + '%)', result: t.incl
+      };
+    });
+    var all = totals.all;
+    var allResults = { qty: all.qty, regular: all.regular, special: all.special, net: all.total, gross: all.incl };
+    Object.keys(rows).forEach(function (key) {
+      ws.getCell(rows[key], 9).value = {
+        formula: 'C' + rows[key] + '+F' + rows[key], result: allResults[key]
+      };
+    });
 
-    ws.pageSetup.printArea = 'A1:J' + ws.rowCount;
-    ws.pageSetup.printTitlesRow = '4:5';
+    ws.pageSetup.printTitlesRow = '1:2';
+    ws.pageSetup.printArea = 'A1:J' + rows.gross;
     return wb;
   }
 
@@ -300,14 +297,23 @@
     INSTITUTIONS: INSTITUTIONS,
     DEFAULT_PRICE: DEFAULT_PRICE,
     DEFAULT_VAT: DEFAULT_VAT,
+    MAX_DAYS: MAX_DAYS,
     MONTHS: MONTHS,
     WEEKDAYS: WEEKDAYS,
     daysInMonth: daysInMonth,
     weekday: weekday,
+    parseIso: parseIso,
+    toIso: toIso,
+    monthRange: monthRange,
+    periodOf: periodOf,
+    rangeDays: rangeDays,
     round2: round2,
-    entry: entry,
+    isSpecial: isSpecial,
+    linesOf: linesOf,
+    lineEntry: lineEntry,
+    defaultPrice: defaultPrice,
+    hasData: hasData,
     computeTotals: computeTotals,
-    reportDays: reportDays,
     reportFileName: reportFileName,
     buildWorkbook: buildWorkbook
   };

@@ -58,12 +58,12 @@
 
     <section class="panel">
       <div class="panel-head">
-        <h2>הגדרות מחיר</h2>
-        <p>המחירים כוללים מע"מ. בדוח המע"מ מוצג בנפרד.</p>
+        <h2>הגדרות</h2>
+        <p>המחירים הם לפני מע"מ. המע"מ מתווסף בסוף הדוח.</p>
       </div>
       <div class="settings">
         <div class="setting" data-inst="pninim">
-          <span class="inst-label pninim">סמינר פנינים</span>
+          <span class="inst-label pninim">סמינר פנינים · מחיר למנה</span>
           <div class="field-row">
             <div class="input-affix">
               <input type="number" step="0.01" min="0" class="bulk-price" aria-label="מחיר למנה לסמינר פנינים">
@@ -73,7 +73,7 @@
           </div>
         </div>
         <div class="setting" data-inst="keter">
-          <span class="inst-label keter">סמינר כתר חיה</span>
+          <span class="inst-label keter">סמינר כתר חיה · מחיר למנה</span>
           <div class="field-row">
             <div class="input-affix">
               <input type="number" step="0.01" min="0" class="bulk-price" aria-label="מחיר למנה לסמינר כתר חיה">
@@ -82,7 +82,16 @@
             <button type="button" class="btn outline apply-price">החל על כל החודש</button>
           </div>
         </div>
-        <div class="setting vat-setting">
+        <div class="setting">
+          <span class="inst-label">טווח תאריכים בדוח</span>
+          <div class="field-row">
+            <input type="date" id="from" class="date-input" aria-label="מתאריך">
+            <span class="range-sep">עד</span>
+            <input type="date" id="to" class="date-input" aria-label="עד תאריך">
+            <button type="button" class="btn outline" id="reset-range">החודש המלא</button>
+          </div>
+        </div>
+        <div class="setting">
           <span class="inst-label">שיעור מע"מ</span>
           <div class="input-affix">
             <input type="number" step="0.1" min="0" id="vat" aria-label="שיעור מע&quot;מ">
@@ -95,7 +104,7 @@
     <section class="panel table-panel">
       <div class="panel-head">
         <h2>פירוט יומי</h2>
-        <p>Enter עובר לאותו שדה ביום הבא</p>
+        <p>לחצו על + כדי להוסיף שורה לאותו תאריך עם מחיר אחר · Enter עובר לשורה הבאה</p>
       </div>
       <div class="table-scroll">
         <table id="grid">
@@ -103,39 +112,32 @@
             <tr>
               <th rowspan="2" class="col-date">תאריך</th>
               <th rowspan="2" class="col-day">יום</th>
-              <th colspan="3" class="grp pninim">סמינר פנינים</th>
-              <th colspan="3" class="grp keter">סמינר כתר חיה</th>
-              <th rowspan="2" class="col-sum">סה"כ ליום</th>
+              <th colspan="3" class="grp pninim">פנינים</th>
+              <th colspan="3" class="grp keter">כתר חיה</th>
+              <th rowspan="2" class="col-sum">סה"כ לשורה</th>
               <th rowspan="2" class="col-note">הערות</th>
+              <th rowspan="2" class="col-act"></th>
             </tr>
             <tr>
-              <th class="sub pninim">מנות</th>
-              <th class="sub pninim">מחיר</th>
+              <th class="sub pninim">כמות סועדות</th>
+              <th class="sub pninim">מחיר למנה</th>
               <th class="sub pninim">סה"כ</th>
-              <th class="sub keter sep">מנות</th>
-              <th class="sub keter">מחיר</th>
+              <th class="sub keter sep">כמות סועדות</th>
+              <th class="sub keter">מחיר למנה</th>
               <th class="sub keter">סה"כ</th>
             </tr>
           </thead>
           <tbody id="rows"></tbody>
           <tfoot>
             <tr>
-              <td colspan="2">סה"כ חודשי</td>
+              <td colspan="2">סה"כ (ללא מע"מ)</td>
               <td id="f-pninim-qty"></td><td></td><td id="f-pninim-total" class="money"></td>
               <td id="f-keter-qty" class="sep"></td><td></td><td id="f-keter-total" class="money"></td>
-              <td id="f-all-total" class="money sep"></td><td></td>
+              <td id="f-all-total" class="money sep"></td><td></td><td></td>
             </tr>
           </tfoot>
         </table>
       </div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-head">
-        <h2>הערות כלליות</h2>
-        <p>יופיעו בתחתית הדוח</p>
-      </div>
-      <textarea id="general-note" rows="3" placeholder="לדוגמה: מספר הזמנה, פרטי איש קשר…"></textarea>
     </section>
   </main>
 
