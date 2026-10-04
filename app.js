@@ -7,6 +7,7 @@
 
   var monthSel = $('#month'), yearSel = $('#year'), vatInput = $('#vat');
   var fromInput = $('#from'), toInput = $('#to'), tbody = $('#rows');
+  var fileInput = $('#file-name');
   var year, month, state;
 
   /* ---------- storage (localStorage may be unavailable) ---------- */
@@ -178,6 +179,8 @@
     var p = period();
     fromInput.value = p.from;
     toInput.value = p.to;
+    fileInput.placeholder = R.defaultFileBase(year, month);
+    fileInput.value = state.fileName || '';
     document.querySelectorAll('.setting[data-inst]').forEach(function (box) {
       box.querySelector('.bulk-price').value = R.defaultPrice(state, box.dataset.inst);
     });
@@ -376,6 +379,14 @@
     setRange(def.from, def.to);
   });
 
+  fileInput.addEventListener('input', function () {
+    if (fileInput.value.trim()) state.fileName = fileInput.value; else delete state.fileName;
+    saveState();
+  });
+  fileInput.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter') { ev.preventDefault(); $('#export').click(); }
+  });
+
   /* ---------- month navigation ---------- */
   monthSel.addEventListener('change', render);
   yearSel.addEventListener('change', render);
@@ -428,14 +439,32 @@
       });
       var a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = R.reportFileName(year, month);
+      var fileName = R.reportFileName(year, month, fileInput.value);
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
       a.remove();
       setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
-      toast('הדוח הורד בהצלחה');
+      // FSI/PDI keep a Hebrew name with ".xlsx" in the right order inside the Hebrew message.
+      toast('הדוח \u2068' + fileName + '\u2069 הורד בהצלחה');
     });
   });
 
+  /* ---------- table width ---------- */
+  // The daily table grows with the page; if it is wider than its panel, scroll it sideways.
+  var scroller = $('.table-scroll'), grid = $('#grid');
+  function fitTable() {
+    var wide = grid.offsetWidth > scroller.clientWidth + 1;
+    if (wide !== scroller.classList.contains('scroll-x')) scroller.classList.toggle('scroll-x', wide);
+  }
+  if (window.ResizeObserver) {
+    var ro = new ResizeObserver(fitTable);
+    ro.observe(grid);
+    ro.observe(scroller);
+  } else {
+    window.addEventListener('resize', fitTable);
+  }
+
   render();
+  fitTable();
 })();

@@ -89,7 +89,12 @@ h1 {
 }
 .icon-btn:hover { border-color: var(--navy); color: var(--navy); }
 
-.head-actions { display: flex; gap: 10px; align-items: center; }
+.head-actions { display: flex; gap: 10px; align-items: flex-end; }
+.file-name { display: flex; flex-direction: column; gap: 4px; }
+.file-name-label { font-size: .75rem; font-weight: 500; color: var(--muted); }
+.file-name .input-affix { height: 42px; }
+.file-name .input-affix input { width: 230px; }
+.file-name .input-affix span { font-size: .85rem; }
 
 /* ---------- buttons ---------- */
 .btn {
@@ -174,9 +179,10 @@ textarea {
 textarea:focus { outline: 0; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(31, 53, 80, .1); background: #fff; }
 
 /* ---------- table ---------- */
-.table-panel { padding: 22px 0 0; overflow: hidden; }
+/* The daily table grows with its content; the page scrolls, not an inner box. */
+.table-panel { padding: 22px 0 0; overflow: clip; }
 .table-panel .panel-head { padding: 0 24px; }
-.table-scroll { overflow: auto; max-height: 72vh; border-top: 1px solid var(--line); }
+.table-scroll { border-top: 1px solid var(--line); }
 table { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 960px; }
 th, td { padding: 6px 10px; text-align: center; white-space: nowrap; border-bottom: 1px solid var(--line); }
 
@@ -184,8 +190,13 @@ thead th {
   position: sticky; z-index: 3; background: #faf8f4;
   font-size: .78rem; font-weight: 600; color: var(--muted); letter-spacing: .3px;
 }
-thead tr:first-child th { top: 0; height: 40px; }
-thead tr:nth-child(2) th { top: 40px; height: 32px; }
+/* column headers stay pinned under the site header (68px) while scrolling */
+thead tr:first-child th { top: 68px; height: 40px; }
+thead tr:nth-child(2) th { top: 108px; height: 32px; }
+/* set by app.js only when the table is wider than its panel: scroll it sideways there */
+.table-scroll.scroll-x { overflow-x: auto; }
+.table-scroll.scroll-x thead tr:first-child th { top: 0; }
+.table-scroll.scroll-x thead tr:nth-child(2) th { top: 40px; }
 thead th[rowspan] { color: var(--ink-soft); }
 th.grp { font-size: .88rem; font-weight: 700; border-bottom: 2px solid; }
 th.grp.pninim { color: var(--pninim); border-bottom-color: var(--pninim); background: var(--pninim-tint); }

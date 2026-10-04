@@ -133,8 +133,19 @@
     return { institutions: institutions, all: finish(all, rate) };
   }
 
-  function reportFileName(year, month) {
-    return 'meals-report-' + year + '-' + pad(month + 1) + '.xlsx';
+  function defaultFileBase(year, month) {
+    return 'דוח מנות - ' + MONTHS[month] + ' ' + year;
+  }
+
+  /* File name chosen by the user (without characters Windows/macOS reject), or the default. */
+  function reportFileName(year, month, customName) {
+    var base = String(customName || '')
+      .replace(/[\\/:*?"<>|\u0000-\u001f]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/\.xlsx$/i, '')
+      .replace(/^[\s.]+|[\s.]+$/g, '')
+      .slice(0, 120);
+    return (base || defaultFileBase(year, month)) + '.xlsx';
   }
 
   /* ---------- Excel (mirrors the existing monthly reports) ---------- */
@@ -314,6 +325,7 @@
     defaultPrice: defaultPrice,
     hasData: hasData,
     computeTotals: computeTotals,
+    defaultFileBase: defaultFileBase,
     reportFileName: reportFileName,
     buildWorkbook: buildWorkbook
   };
